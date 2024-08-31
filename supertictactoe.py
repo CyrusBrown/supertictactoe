@@ -1,10 +1,13 @@
 import pygame
 
 pygame.init()
+pygame.font.init()
+game_font = pygame.font.SysFont('Comic Sans MS', 200)
 screen = pygame.display.set_mode((1080, 1080))
 clock = pygame.time.Clock()
 running = True
 turn = 1
+winner = 0
 
 def check_win(boardstate):
     print(boardstate)
@@ -60,7 +63,7 @@ class Board:
 
     def update(self, position, player):
         x, y = position
-        if self.boardstate[y][x] == 0:  # Update using consistent [y][x] indexing
+        if self.boardstate[y][x] == 0:
             self.boardstate[y][x] = player
             return True
         return False
@@ -89,24 +92,30 @@ class SuperBoard:
 
         #draw highlight for the active board
         if self.active_board != (-1, -1):
-            pygame.draw.rect(screen, "red", (self.active_board[0] * 360, self.active_board[1] * 360, 360, 360), 10)
+            pygame.draw.rect(screen, "red", (self.active_board[0] * 360 , self.active_board[1] * 360, 360, 360), 10)
         else:
             pygame.draw.rect(screen, "red", (0, 0, 1080, 1080), 10)
 
 
     def update(self, position, subgrid_position, player):
-        board = self.boards[position[1]][position[0]]  # Consistent [y][x] indexing
-        if position != self.active_board:
+
+        #select the subboard
+        board = self.boards[position[1]][position[0]]
+
+        #check if the board is the current selected board
+        if not board.enabled:
+            return False
+        if position != self.active_board and self.active_board != (-1, -1):
             if board.enabled:
                 return False
-            else:
-                self.active_board = (-1, -1)
         if result := board.update(subgrid_position, player):
-            self.active_board = subgrid_position
-            print(board.check_win())
             if board.check_win():
                 self.boardstate[position[1]][position[0]] = player
                 board.enabled = False
+            if self.boardstate[subgrid_position[1]][subgrid_position[0]] == 0:
+                self.active_board = subgrid_position
+            else:
+                self.active_board = (-1, -1)
         return result
     
     def check_win(self):
@@ -127,7 +136,14 @@ def process_click(position):
     
     return large_grid_position, subgrid_position
 
-superboard = SuperBoard()
+def init_game():
+    global turn, winner
+    turn = 1
+    winner = 0
+    superboard = SuperBoard()
+    return superboard
+
+superboard = init_game()
 while running:
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -136,9 +152,26 @@ while running:
             large_grid_position, subgrid_position = process_click(event.pos)
             if superboard.update(large_grid_position, subgrid_position, turn):
                 turn *= -1
-    screen.fill("black")  # Clear the screen before drawing
-    superboard.draw()
-    pygame.display.flip()
-    clock.tick(60)
+            if superboard.check_win():
+                winner = turn * -1
+    
+    if winner == 0:
+        screen.fill("black")  # Clear the screen before drawing
+        superboard.draw()
+        pygame.display.flip()
+        clock.tick(60)
+    else:
+        screen.fill("black")
+        text_surface = game_font.render(f"{'X' if winner == -1 else 'O'} wins!", False, (255, 255, 255))
+        text_surface2 = game_font.render("Click to restart", False, (255, 255, 255))
+        screen.blit(text_surface, (540 - text_surface.get_width() // 2, 540 - text_surface.get_height() // 2))
+        screen.blit(text_surface2, (540 - text_surface2.get_width() // 2, 540 + text_surface.get_height() // 2))
+        pygame.display.flip()
+        for event in pygame.event.get():
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                superboard = init_game()
+                break
+            if event.type == pygame.QUIT:
+                running = False
 
 pygame.quit()
